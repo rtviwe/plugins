@@ -1,8 +1,5 @@
 package io.flutter.plugins.camera;
 
-import static android.view.OrientationEventListener.ORIENTATION_UNKNOWN;
-import static io.flutter.plugins.camera.CameraUtils.computeBestPreviewSize;
-
 import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.content.Context;
@@ -25,10 +22,9 @@ import android.os.Build;
 import android.util.Size;
 import android.view.OrientationEventListener;
 import android.view.Surface;
+
 import androidx.annotation.NonNull;
-import io.flutter.plugin.common.EventChannel;
-import io.flutter.plugin.common.MethodChannel.Result;
-import io.flutter.view.TextureRegistry.SurfaceTextureEntry;
+
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -38,6 +34,16 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+
+import io.flutter.plugin.common.EventChannel;
+import io.flutter.plugin.common.MethodChannel.Result;
+import io.flutter.plugins.camera.barcode.BarcodeDetectorWrapper;
+import io.flutter.plugins.camera.barcode.BarcodeDetectorResult;
+import io.flutter.plugins.camera.barcode.BarcodeUtils;
+import io.flutter.view.TextureRegistry.SurfaceTextureEntry;
+
+import static android.view.OrientationEventListener.ORIENTATION_UNKNOWN;
+import static io.flutter.plugins.camera.CameraUtils.computeBestPreviewSize;
 
 public class Camera {
   private final SurfaceTextureEntry flutterTexture;
@@ -474,6 +480,71 @@ public class Camera {
         },
         null);
   }
+
+    private BarcodeDetectorWrapper barcodeDetector;
+
+    public void startBarcodeStreaming(EventChannel barcodeStreamChannel, int barcodeFormats, long throttle)
+            throws CameraAccessException {
+        if (barcodeDetector != null) {
+            return;
+        }
+
+        barcodeDetector = new BarcodeDetectorWrapper(barcodeFormats, throttle);
+        createCaptureSession(CameraDevice.TEMPLATE_RECORD, imageStreamReader.getSurface());
+
+        barcodeStreamChannel.setStreamHandler(
+                new EventChannel.StreamHandler() {
+                    @Override
+                    public void onListen(Object o, EventChannel.EventSink imageStreamSink) {
+                        imageStreamReader.setOnImageAvailableListener(
+                                new BarcodeOnImageAvailableListener(imageStreamSink), null);
+                    }
+
+                    @Override
+                    public void onCancel(Object o) {
+                        imageStreamReader.setOnImageAvailableListener(null, null);
+                    }
+                });
+    }
+
+    public void stopBarcodeStreaming() throws CameraAccessException {
+        barcodeDetector = null;
+        startPreview();
+    }
+
+    private class BarcodeOnImageAvailableListener implements ImageReader.OnImageAvailableListener {
+        private final EventChannel.EventSink imageStreamSink;
+
+        private BarcodeOnImageAvailableListener(final EventChannel.EventSink imageStreamSink) {
+            this.imageStreamSink = imageStreamSink;
+        }
+
+        @Override
+        public void onImageAvailable(final ImageReader reader) {
+            final Image image = reader.acquireLatestImage();
+            if (image == null) {
+                return;
+            }
+
+            final BarcodeDetectorWrapper barcodeDetector = Camera.this.barcodeDetector;
+            if (barcodeDetector != null) {
+                barcodeDetector.detect(image, getMediaOrientation());
+
+                final BarcodeDetectorResult result = barcodeDetector.getRecentResult();
+                if (result != null) {
+                    barcodeDetector.resetResult();
+
+                    Map<String, Object> barcodesResult = new HashMap<>();
+                    barcodesResult.put("imageWidth", image.getWidth());
+                    barcodesResult.put("imageHeight", image.getHeight());
+                    barcodesResult.put("barcodes", BarcodeUtils.serializeResult(result));
+
+                    imageStreamSink.success(barcodesResult);
+                }
+            }
+            image.close();
+        }
+    }
 
   private void closeCaptureSession() {
     if (cameraCaptureSession != null) {

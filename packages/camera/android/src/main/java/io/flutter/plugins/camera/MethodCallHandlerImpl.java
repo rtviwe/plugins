@@ -20,6 +20,7 @@ final class MethodCallHandlerImpl implements MethodChannel.MethodCallHandler {
   private final TextureRegistry textureRegistry;
   private final MethodChannel methodChannel;
   private final EventChannel imageStreamChannel;
+  private final EventChannel barcodeStreamChannel;
   private @Nullable Camera camera;
 
   MethodCallHandlerImpl(
@@ -36,6 +37,7 @@ final class MethodCallHandlerImpl implements MethodChannel.MethodCallHandler {
 
     methodChannel = new MethodChannel(messenger, "plugins.flutter.io/camera");
     imageStreamChannel = new EventChannel(messenger, "plugins.flutter.io/camera/imageStream");
+    barcodeStreamChannel = new EventChannel(messenger, "plugins.flutter.io/camera/barcodeStream");
     methodChannel.setMethodCallHandler(this);
   }
 
@@ -123,6 +125,26 @@ final class MethodCallHandlerImpl implements MethodChannel.MethodCallHandler {
           }
           break;
         }
+      case "startBarcodeStreaming": {
+        try {
+          final int barcodeFormats = call.argument("barcodeFormats");
+          final int throttle = call.argument("throttle");
+          camera.startBarcodeStreaming(barcodeStreamChannel, barcodeFormats, throttle);
+          result.success(null);
+        } catch (Exception e) {
+          handleException(e, result);
+        }
+        break;
+      }
+      case "stopBarcodeStreaming": {
+        try {
+          camera.stopBarcodeStreaming();
+          result.success(null);
+        } catch (Exception e) {
+          handleException(e, result);
+        }
+        break;
+      }
       case "enableFlash":
       {
         try {
