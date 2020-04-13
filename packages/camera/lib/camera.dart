@@ -678,16 +678,14 @@ class CameraController extends ValueNotifier<CameraValue> {
   }
 
 //flash
-  Future<bool> flash(bool value) async {
+  Future<void> flash(bool value) async {
     try {
-      final Map<String, dynamic> reply =
       await _channel.invokeMapMethod<String, dynamic>(
         'enableFlash',
         <String, dynamic>{
           'flash': value,
         },
       );
-      return reply['flash'];
     } on PlatformException catch (e) {
       throw CameraException(e.code, e.message);
     }

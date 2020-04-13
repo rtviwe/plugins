@@ -974,6 +974,7 @@ FourCharCode const videoFormat = kCVPixelFormatType_32BGRA;
     } else if ([@"enableFlash" isEqualToString:call.method]) {
       BOOL isEnabled = [call.arguments[@"flash"] boolValue];
       [_camera setFlash:isEnabled];
+      result(nil);
     } else {
       result(FlutterMethodNotImplemented);
     }
