@@ -3,6 +3,8 @@
 // found in the LICENSE file.
 
 #import "CameraPlugin.h"
+#import "barcode/BarcodeDetectorWrapper.h"
+#import "barcode/BarcodeDetectorResult.h"
 #import <AVFoundation/AVFoundation.h>
 #import <Accelerate/Accelerate.h>
 #import <CoreMotion/CoreMotion.h>
@@ -164,6 +166,7 @@ static ResolutionPreset getResolutionPresetForString(NSString *preset) {
 @property BOOL enableAudio;
 @property(nonatomic) FlutterEventChannel *eventChannel;
 @property(nonatomic) FLTImageStreamHandler *imageStreamHandler;
+@property(nonatomic) FLTImageStreamHandler *barcodeStreamHandler;
 @property(nonatomic) FlutterEventSink eventSink;
 @property(readonly, nonatomic) AVCaptureSession *captureSession;
 @property(readonly, nonatomic) AVCaptureDevice *captureDevice;
@@ -185,6 +188,7 @@ static ResolutionPreset getResolutionPresetForString(NSString *preset) {
 @property(assign, nonatomic) BOOL audioIsDisconnected;
 @property(assign, nonatomic) BOOL isAudioSetup;
 @property(assign, nonatomic) BOOL isStreamingImages;
+@property(assign, nonatomic) BOOL isStreamingBarcodes;
 @property(assign, nonatomic) ResolutionPreset resolutionPreset;
 @property(assign, nonatomic) CMTime lastVideoSampleTime;
 @property(assign, nonatomic) CMTime lastAudioSampleTime;
@@ -192,6 +196,7 @@ static ResolutionPreset getResolutionPresetForString(NSString *preset) {
 @property(assign, nonatomic) CMTime audioTimeOffset;
 @property(nonatomic) CMMotionManager *motionManager;
 @property AVAssetWriterInputPixelBufferAdaptor *videoAdaptor;
+@property BarcodeDetectorWrapper *barcodeDetector;
 - (instancetype)initWithCameraName:(NSString *)cameraName
                   resolutionPreset:(NSString *)resolutionPreset
                        enableAudio:(BOOL)enableAudio
@@ -424,6 +429,18 @@ FourCharCode const videoFormat = kCVPixelFormatType_32BGRA;
       _imageStreamHandler.eventSink(imageBuffer);
 
       CVPixelBufferUnlockBaseAddress(pixelBuffer, kCVPixelBufferLock_ReadOnly);
+    }
+  }
+  if (_isStreamingBarcodes) {
+    if (_barcodeStreamHandler.eventSink) {
+      AVCaptureDevicePosition devicePosition = _captureDevice.position;
+      [_barcodeDetector detectInSampleBuffer:sampleBuffer
+                           forDevicePosition:devicePosition
+                                withCallback:^(BarcodeDetectorResult *result) {
+                                  if (_isStreamingBarcodes) {
+                                    _barcodeStreamHandler.eventSink([result asSerialized]);
+                                  }
+                                }];
     }
   }
   if (_isRecording && !_isRecordingPaused) {
@@ -670,6 +687,36 @@ FourCharCode const videoFormat = kCVPixelFormatType_32BGRA;
   }
 }
 
+- (void)startBarcodeStreamWithMessenger:(NSObject<FlutterBinaryMessenger> *)messenger
+                         barcodeFormats:(FIRVisionBarcodeFormat)formats
+                            andThrottle:(long)throttle {
+  if (!_isStreamingBarcodes) {
+    FlutterEventChannel *eventChannel =
+        [FlutterEventChannel eventChannelWithName:@"plugins.flutter.io/camera/barcodeStream"
+                                  binaryMessenger:messenger];
+
+    _imageStreamHandler = [[FLTImageStreamHandler alloc] init];
+    [eventChannel setStreamHandler:_barcodeStreamHandler];
+
+    _barcodeDetector = [[BarcodeDetectorWrapper alloc] initWithFormats:formats andThrottle:throttle];
+    _isStreamingBarcodes = YES;
+  } else {
+    _eventSink(
+        @{@"event" : @"error", @"errorDescription" : @"Barcodes from camera are already streaming!"});
+  }
+}
+
+- (void)stopBarcodeStream {
+  if (_isStreamingBarcodes) {
+    _isStreamingBarcodes = NO;
+    _barcodeDetector = nil;
+    _barcodeStreamHandler = nil;
+  } else {
+    _eventSink(
+        @{@"event" : @"error", @"errorDescription" : @"Barcodes from camera are not streaming!"});
+  }
+}
+
 - (BOOL)setupWriterForPath:(NSString *)path {
   NSError *error = nil;
   NSURL *outputURL;
@@ -894,6 +941,17 @@ FourCharCode const videoFormat = kCVPixelFormatType_32BGRA;
     result(nil);
   } else if ([@"resumeVideoRecording" isEqualToString:call.method]) {
     [_camera resumeVideoRecording];
+    result(nil);
+  } else if ([@"startBarcodeStream" isEqualToString:call.method]) {
+    FIRVisionBarcodeFormat formats = [call.arguments[@"barcodeFormats"] intValue];
+    long throttle = [call.arguments[@"throttle"] longValue];
+    [_camera startBarcodeStreamWithMessenger:_messenger
+                              barcodeFormats:formats
+                                 andThrottle:throttle];
+    result(nil);
+  }
+  else if ([@"stopBarcodeStream" isEqualToString:call.method]) {
+    [_camera stopBarcodeStream];
     result(nil);
   } else {
     NSDictionary *argsMap = call.arguments;
