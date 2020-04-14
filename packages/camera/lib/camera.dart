@@ -649,7 +649,7 @@ class CameraController extends ValueNotifier<CameraValue> {
     }
 
     try {
-      value = value.copyWith(isStreamingImages: false);
+      value = value.copyWith(isBarcodeListening: false);
       await _channel.invokeMethod<void>('stopBarcodeStreaming');
     } on PlatformException catch (e) {
       throw CameraException(e.code, e.message);
