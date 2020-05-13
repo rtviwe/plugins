@@ -687,9 +687,9 @@ FourCharCode const videoFormat = kCVPixelFormatType_32BGRA;
   }
 }
 
-- (void)startBarcodeStreamWithMessenger:(NSObject<FlutterBinaryMessenger> *)messenger
-                         barcodeFormats:(FIRVisionBarcodeFormat)formats
-                            andThrottle:(long)throttle {
+- (void)startBarcodeStreamingWithMessenger:(NSObject<FlutterBinaryMessenger> *)messenger
+                            barcodeFormats:(FIRVisionBarcodeFormat)formats
+                               andThrottle:(long)throttle {
   if (!_isStreamingBarcodes) {
     FlutterEventChannel *eventChannel =
         [FlutterEventChannel eventChannelWithName:@"plugins.flutter.io/camera/barcodeStream"
@@ -706,7 +706,7 @@ FourCharCode const videoFormat = kCVPixelFormatType_32BGRA;
   }
 }
 
-- (void)stopBarcodeStream {
+- (void)stopBarcodeStreaming {
   if (_isStreamingBarcodes) {
     _isStreamingBarcodes = NO;
     _barcodeDetector = nil;
@@ -942,16 +942,16 @@ FourCharCode const videoFormat = kCVPixelFormatType_32BGRA;
   } else if ([@"resumeVideoRecording" isEqualToString:call.method]) {
     [_camera resumeVideoRecording];
     result(nil);
-  } else if ([@"startBarcodeStream" isEqualToString:call.method]) {
+  } else if ([@"startBarcodeStreaming" isEqualToString:call.method]) {
     FIRVisionBarcodeFormat formats = [call.arguments[@"barcodeFormats"] intValue];
     long throttle = [call.arguments[@"throttle"] longValue];
-    [_camera startBarcodeStreamWithMessenger:_messenger
+    [_camera startBarcodeStreamingWithMessenger:_messenger
                               barcodeFormats:formats
                                  andThrottle:throttle];
     result(nil);
   }
-  else if ([@"stopBarcodeStream" isEqualToString:call.method]) {
-    [_camera stopBarcodeStream];
+  else if ([@"stopBarcodeStreaming" isEqualToString:call.method]) {
+    [_camera stopBarcodeStreaming];
     result(nil);
   } else {
     NSDictionary *argsMap = call.arguments;
