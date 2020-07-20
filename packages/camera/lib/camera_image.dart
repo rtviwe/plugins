@@ -9,7 +9,7 @@ part of 'camera.dart';
 /// The number and meaning of the planes in an image are determined by the
 /// format of the Image.
 class Plane {
-  Plane._fromPlatformData(Map<dynamic, dynamic> data)
+  Plane.fromPlatformData(Map<dynamic, dynamic> data)
       : bytes = data['bytes'],
         bytesPerPixel = data['bytesPerPixel'],
         bytesPerRow = data['bytesPerRow'],
@@ -117,8 +117,8 @@ class CameraImage {
       : format = ImageFormat._fromPlatformData(data['format']),
         height = data['height'],
         width = data['width'],
-        planes = List<Plane>.unmodifiable(data['planes']
-            .map((dynamic planeData) => Plane._fromPlatformData(planeData)));
+        planes = List<Plane>.unmodifiable(
+            data['planes'].map((dynamic planeData) => Plane.fromPlatformData(planeData)));
 
   /// Format of the image provided.
   ///
